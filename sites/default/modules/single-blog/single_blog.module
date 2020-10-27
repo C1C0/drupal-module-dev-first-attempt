@@ -6,7 +6,8 @@
  */
 
 define('SINGLE_BLOG_NODE_TYPE', 'article');
-define('SINGLE_BLOG_LIST_COUNT', 3);
+define('SINGLE_BLOG_LIST_COUNT', 5);
+define('SINGLE_BLOG_DATE_FORMAT', 'F d, Y');
 
 /**
  * Returns a list of blog entries
@@ -50,7 +51,7 @@ function single_blog_block_info()
 /**
  * Implements hook_block_view().
  * 
- * Second draft!
+ * Third draft!
  * 
  * @param $delta
  *   The name of the requested block.
@@ -78,9 +79,8 @@ function single_blog_block_view($delta = '')
             foreach ($result as $node) {
                 $items[] = [
                     'data' => [
-                        '#type' => 'link',
-                        '#title' => $node->title,
-                        '#href' => 'node/' . $node->nid,
+                        '#theme' => 'single_blog_block_item',
+                        '#node' => $node,
                     ],
                     'class' => ['node-' . $node->nid],
                 ];
@@ -100,10 +100,13 @@ function single_blog_block_view($delta = '')
                     '#url' => 'blog',
                     '#title' => t('Read the latest blog entries.'),
                 ];
+
+                //add a css file to style the block
+                $block['content']['#attached']['css'][] = drupal_get_path('module', 'single_blog') . '/single_blog.css';
             }
         }
     }
-    $block['content']['#attached']['css'][] = drupal_get_path('module', 'single_blog') . '/single_blog.css';
+
     return $block;
 }
 
@@ -113,7 +116,7 @@ function single_blog_block_view($delta = '')
  */
 function single_blog_item_list_child_render($elements)
 {
-    foreach (array_keys($elements['#items']) AS $key) {
+    foreach (array_keys($elements['#items']) as $key) {
         //take the reanderable array that we set in
         //single_blog_block_view() and render it into the string
         //that theme_item_list() expects
@@ -124,4 +127,46 @@ function single_blog_item_list_child_render($elements)
     }
 
     return $elements;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function single_blog_theme($existing, $type, $theme, $path)
+{
+    return [
+        'single_blog_block_item' => [
+            'variables' => [
+                'node' => NULL,
+            ],
+            'template' => 'single-blog-block-item',
+        ],
+    ];
+}
+
+/**
+ * preprocesses single blog block item variables
+ */
+function template_preprocess_single_blog_block_item(&$variables)
+{
+    $node = $variables['node'];
+
+    //create a renderable array for the title
+    $variables['title'] = [
+        '#type' => 'link',
+        '#title' => $node->title,
+        '#href' => 'node/' . $node->nid,
+    ];
+
+    //foramt the creation of the node.
+    $variables['created'] = $node->created;
+    $variables['date'] = format_date($node->created, 'custom', SINGLE_BLOG_DATE_FORMAT);
+
+    //load the account object with the node's creator and store
+    $variables['user'] = user_load($node->uid);
+
+    //theme the uesrname.
+    $variables['name'] = theme('username', [
+        'account' => $variables['user'],
+    ]);
 }
