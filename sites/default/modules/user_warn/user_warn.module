@@ -73,12 +73,12 @@ function user_warn_menu()
 
 define(
     'USER_WARN_MAIL_TEXT',
-    "Hello, 
-
+    "Hello [user:name], 
+    
     You know, you've done something wrong. Please, be better,
 
     Sincerely
-    Admin staff"
+    [site:name]"
 );
 
 /**
@@ -90,7 +90,7 @@ function user_warn_form($form, &$form_state)
     //text field for the e-mail subject.
     $form['user_warn_e-mail_subject'] = [
         '#type' => 'textfield',
-        '#default_value' => variable_get('user_warn_e-mail_subject', 'Administrative Warning'),
+        '#default_value' => 'Administrative Warning',
         //label
         '#title' => t('Warning e-mail subject'),
         //optional desc
@@ -105,7 +105,7 @@ function user_warn_form($form, &$form_state)
         '#type' => 'textarea',
         '#rows' => 10,
         '#columns' => 40,
-        '#default_value' => variable_get('user_warn_e-mail_text', USER_WARN_MAIL_TEXT),
+        '#default_value' => USER_WARN_MAIL_TEXT,
         '#title' => t('Warning e-mail text'),
         '#required' => TRUE,
         '#description' => t('The text of the email which will be sent to users.'),
@@ -114,18 +114,15 @@ function user_warn_form($form, &$form_state)
     //checkbox to indicate if admin should be sent a Bcc onj e-mails.
     $form['user_warn_bcc'] = [
         '#type' => 'checkbox',
-        '#default_value' => variable_get('user_warn_bcc', FALSE),
+        '#default_value' => FALSE,
         '#title' => t('BCC admin on all e-mails'),
         '#description' => t('Indicates, whether the admin user (as set in site configuration) should be sent on all warning e-mails.'),
     ];
 
-    //submit button'
-    $form['submit'] = [
-        '#type' => 'submit',
-        '#value' => t('Save Settings'),
-    ];
-
-    return $form;
+    //adds submit button element with 'Save Settings label on it"
+    //Not need to write _subtmi() function, because
+    //it uses it's own system_settings_form_submit()
+    return system_settings_form($form);
 }
 
 /**
@@ -154,10 +151,67 @@ function user_warn_confirm_form($form, &$form_state, $uid)
 /**
  * Save configuration settings for user Warn module.
  */
-function user_warn_form_submit($form, &$form_state){
-    variable_set('user_warn_e-mail_subject',$form_state['values']['user_warn_e-mail_subject']);
+function user_warn_form_submit($form, &$form_state)
+{
+    variable_set('user_warn_e-mail_subject', $form_state['values']['user_warn_e-mail_subject']);
     variable_set('user_warn_e-mail_text', $form_state['values']['user_warn_e-mail_text']);
     variable_set('user_warn_bcc', $form_state['values']['user_warn_bcc']);
-    
+
     drupal_set_message(t('The settings have been saved'));
+}
+
+/**
+ * Send a warning e-mail to the specified user.
+ */
+function user_warn_confirm_form_submit($form, &$form_state)
+{
+    $account = $form_state['values']['account'];
+
+    drupal_mail(
+        //what module should invoke hook_mail()
+        //in this case, user_warn_mail()
+        'user_warn',
+        //key, which is passed into hook_mail
+        //hook_mail can define several emails, so by key
+        // you can choose "that" one
+        'warn',
+        //recipents address
+        $account->mail,
+        //takes user's language 
+        user_preferred_language($account),
+        //custom info for hook_mail()
+        $form_state['values'],
+        //From whom is this mail sent
+        variable_get('site_mail', NULL),
+        //you give responsibility of seding this email to drupal_mail_send()
+        //if false, you have to send it by yourself
+        TRUE
+    );
+}
+
+/**
+ * Implement hook_mail().
+ */
+function user_warn_mail($key, &$message, $params)
+{
+    switch ($key) {
+        case 'warn':
+            $account = $params['account'];
+            $subject = variable_get(
+                'user_warn_e-mail_subject',
+                'Administrative Warning'
+            );
+            $body = variable_get(
+                'user_warn_e-mail_text',
+                'You\'ve been warned!'
+            );
+            if (variable_get('user_warn_bcc', FALSE)) {
+                $admin_mail = variable_get('site_mail', NULL);
+                $message['headers']['bcc'] = $admin_mail;
+            }
+            $message['to'] = $account->mail;
+            $message['subject'] = $subject;
+            $message['body'][] = token_replace($body, ['user' => $account]);
+            break;
+    }
 }
