@@ -1,0 +1,163 @@
+<?php
+
+/**
+ * @file
+ * User Warn module file
+ * 
+ * This module allows site administrators to send a stock warning
+ * e-mail to a specified user or users through the admin interface.
+ * Administrators
+ * can configure the default e-mail including token replacement.
+ */
+
+/**
+ * Implements hook_help().
+ */
+function user_warn_help($path, $arg)
+{
+    if ($path == 'admin/help#user_warn') {
+        return t('User Warn allows site administrators to send a stnadard e-mail to site users to notify them of improper behavior.');
+    }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function user_warn_menu()
+{
+    $items = [];
+
+    //defines modules config page
+    //!internal DRUPAL PATH - no leading trails
+    //path not only defines the location of a page
+    // but also its place in the menu hierarhy
+    //people is child of config which is child of admin
+    $items['admin/config/people/user_warn'] = [
+        //page title
+        //<title>, page's heading, subheading ...
+        'title' => 'User Warn',
+        //title tag when you hover over link, t() used automatically
+        'description' => 'Configuration for the User Warn module.',
+        //defines, what will happen, when the page will be requested
+        //defines func that will get called
+        'page callback' => 'drupal_get_form',
+        //defines args for page callback func
+        'page arguments' => ['user_warn_form'],
+        //defines, who can access this page
+        //hook_permission()
+        //admin/people//permissions
+        'access arguments' => ['administer users'],
+        //type of menu we are creating
+        //what features we want our menu items to have
+        'type' => MENU_NORMAL_ITEM,
+    ];
+
+    //defines user tab
+    //admins can go to send the actual e-mail
+    //WILDCARD used
+    $items['user/%/warn'] = [
+        'title' => 'Warn',
+        'description' => 'Send e-mail to a user about improper site behaviour.',
+        'page callback' => 'drupal_get_form',
+        //'user' = 0, '%' = 1, 'warn' = 2, etc ...
+        //to use it, reference to it as a 'number'
+        'page arguments' => ['user_warn_confirm_form', 1],
+        'access arguments' => ['administer users'],
+        //defines that actions can be performed on the parent item
+        //usually rendered as an additional tab on the page in question
+        'type' => MENU_LOCAL_TASK,
+    ];
+
+    return $items;
+}
+
+define(
+    'USER_WARN_MAIL_TEXT',
+    "Hello, 
+
+    You know, you've done something wrong. Please, be better,
+
+    Sincerely
+    Admin staff"
+);
+
+/**
+ * Form build; Create and display the User Warn configuration
+ * settings form.
+ */
+function user_warn_form($form, &$form_state)
+{
+    //text field for the e-mail subject.
+    $form['user_warn_e-mail_subject'] = [
+        '#type' => 'textfield',
+        '#default_value' => variable_get('user_warn_e-mail_subject', 'Administrative Warning'),
+        //label
+        '#title' => t('Warning e-mail subject'),
+        //optional desc
+        '#description' => t('The subject of the e-mail which will be sent to uesrs.'),
+        '#size' => 40,
+        '#maxlength' => 120,
+        '#required' => TRUE,
+    ];
+
+    //textarea for the body of the e-mail
+    $form['user_warn_e-mail_text'] = [
+        '#type' => 'textarea',
+        '#rows' => 10,
+        '#columns' => 40,
+        '#default_value' => variable_get('user_warn_e-mail_text', USER_WARN_MAIL_TEXT),
+        '#title' => t('Warning e-mail text'),
+        '#required' => TRUE,
+        '#description' => t('The text of the email which will be sent to users.'),
+    ];
+
+    //checkbox to indicate if admin should be sent a Bcc onj e-mails.
+    $form['user_warn_bcc'] = [
+        '#type' => 'checkbox',
+        '#default_value' => variable_get('user_warn_bcc', FALSE),
+        '#title' => t('BCC admin on all e-mails'),
+        '#description' => t('Indicates, whether the admin user (as set in site configuration) should be sent on all warning e-mails.'),
+    ];
+
+    //submit button'
+    $form['submit'] = [
+        '#type' => 'submit',
+        '#value' => t('Save Settings'),
+    ];
+
+    return $form;
+}
+
+/**
+ * Form builder; display the e-mail confirmation form.
+ */
+function user_warn_confirm_form($form, &$form_state, $uid)
+{
+    $form['account'] = [
+        //same as hidden input
+        //can contain ANY DATA
+        //NOT PRINTED IN HTML structure
+        '#type' => 'value',
+        '#value' => user_load($uid),
+    ];
+
+    return confirm_form(
+        $form,
+        t('Are you sure you want to send a warning e-mail tothis user ?'),
+        'user/' . $uid,
+        t('This action CANNOT be UNDONE'),
+        t('Send e-mail'),
+        t('Cancel')
+    );
+}
+
+/**
+ * Save configuration settings for user Warn module.
+ */
+function user_warn_form_submit($form, &$form_state){
+    variable_set('user_warn_e-mail_subject',$form_state['values']['user_warn_e-mail_subject']);
+    variable_set('user_warn_e-mail_text', $form_state['values']['user_warn_e-mail_text']);
+    variable_set('user_warn_bcc', $form_state['values']['user_warn_bcc']);
+    
+    drupal_set_message(t('The settings have been saved'));
+}
