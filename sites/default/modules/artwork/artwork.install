@@ -1,0 +1,207 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+
+function artwork_schema()
+{
+    $schema['artwork'] = [
+        'description' => 'The base table for artworks.',
+        'fields' => [
+            'aid' => [
+                'description' => 'The primary ID for an artwork',
+                'type' => 'serial',
+                'unsigned' => TRUE,
+                'not null' => TRUE,
+            ],
+            'vid' => [
+                'description' => 'The current {artwork_revision}.vid version ID',
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE,
+                'default' => 0,
+            ],
+            'type' => [
+                'description' => 'The {artwork_type} of this artwork.',
+                'type' => 'varchar',
+                'length' => 32,
+                'not null' => TRUE,
+                'default' => '',
+            ],
+            'title' => [
+                'description' => 'The title of this artwork.',
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE,
+                'default' => '',
+            ],
+            'created' => [
+                'description' =>
+                'The Unix timestamp when the artwork was created.',
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+            ],
+            'changed' => [
+                'description' =>
+                'The Unix timestamp when the artwork was most recently saved.',
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+            ],
+        ],
+        'unique keys' => [
+            'aid_vid' => ['aid', 'vid'],
+            'aid' => ['aid'],
+        ],
+        'primary key' => ['aid'],
+    ];
+
+    $schema['artwork_revision'] = [
+        'description' => 'Stores info about each save version of an {artwork}.',
+        'fields' => [
+            'aid' => [
+                'description' => 'The {artwork} this version belongs to.',
+                'type' => 'int',
+                'unsigned' => TRUE,
+                'not null' => TRUE,
+                'default' => 0,
+            ],
+            'vid' => [
+                'description' => 'The primary identifier for this version.',
+                'type' => 'serial',
+                'unsigned' => TRUE,
+                'not null' => TRUE,
+            ],
+            'title' => [
+                'description' => 'The title of this version.',
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE,
+                'default' => '',
+            ],
+            'created' => [
+                'description' =>
+                'The Unix timestamp when the artwork was created.',
+                'type' => 'int',
+                'not null' => TRUE,
+                'default' => 0,
+            ],
+        ],
+        'indexes' => [
+            'aid' => ['aid'],
+        ],
+        'primary key' => ['vid'],
+        'foreign keys' => [
+            'artwork' => [
+                'table' => 'artwork',
+                'columns' => [
+                    'aid' => 'aid',
+                ],
+            ],
+        ],
+    ];
+
+    return $schema;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function artwork_entity_info(){
+    //'artwork' machine name for this entity
+    $return['artwork'] = [
+        'label' => t('Artwork'),
+        'controller class' => 'ArtworkController',
+        //Where atwork is gonna be stored
+        'base table' => 'artwork',
+        'revision table' => 'artwork_revision',
+        //allows us to abstract out the def. of the path within Drupal, where artwork will be accessed
+        'uri callback' => 'artwork_uri',
+        //indicates to FieldAPI,
+        //that we can attach fields to this entity
+        //same as "node"
+        'fieldable' => TRUE, 
+        'entity keys' => [
+            'id' => 'aid',
+            'revision' => 'vid', 
+            'bundle' => 'type',
+            'label' => 'title',
+        ],
+        'bundle keys' => [
+            'bundle' => 'type',
+        ],
+        //controller should keep a copy of an entity in memory after it's been requested 
+        'static cache' => TRUE,
+        'bundles' => [],
+        'view modes' => [
+            'full' => [
+                'label' => t('Full content'),
+                //enables field formatters to be configured separately
+                'custom settings' => FALSE,
+            ],
+            'teaser' => [
+                'label' => t('Teaser'),
+                'custom settings' => FALSE,
+            ],
+        ],
+    ];
+
+    foreach(artwork_types() as $type => $info){
+        $return['artwork']['bundles'][$type] = [
+            'label' => $info->name,
+            'admin' => [
+                //path used in hook_menu()
+                'path' => 'admin/structure/artworks/manage/%artwork_type',
+                //exact path when generating linksclo
+                'real path' => 'admin/structure/artworks/manage/' . str_replace("_", '-', $type),
+                'bundle argument' => 4,
+                'access arguments' => ['administer artworks'],
+            ],
+        ];
+    }
+
+    return $return;
+}
+
+function artwork_uri($artwork){
+    return array(
+        'path' => 'artwork' . $artwork->aid,
+    );
+}
+
+function artwork_types(){
+    //Central collector for static variables
+    //__FUNCTION__ represents this function's name
+    //lightweit cache
+    //Don't use for too large data or cheap-to-load data
+    $types = &drupal_static(__FUNCTION__);
+
+    if(empty($types)){
+        //MUST BE AN OBJECT
+        $types['painting'] = (object)[
+            //property "type" has to match with 'bundle keys' in hook_entity_info()
+            'type' => 'painting',
+            'name' => t('Painting'),
+            'description' => t('A picture made with paint'),
+        ];
+
+        $types['sculpture'] = (object)[
+            'type' => 'sculpture',
+            'name' => t('Sculpture'),
+            'description' => t('A carving made out of store or wood.'),
+        ];
+
+    }
+    
+    return $types;
+}
+
+//Necessary placeholder for menu
+function artwork_type_load($type){
+    $types = artwork_types();
+    //in URL are dashes used but in system we use undescores
+    $type = str_replace('-', '_', $type);
+    return isset($types[$type]) ? $types[$type] : FALSE;
+}

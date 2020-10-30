@@ -1,0 +1,10 @@
+name = Artwork
+description = Provides system with basic artwork entity
+core = 7.x
+package = Druapal 7 Development
+
+files[] = artwork.module
+; used only when module is INSTALLED, UPDATED, REMOVED
+files[] = artwork.install
+; controller 
+files[] = artwork.controller.inc
