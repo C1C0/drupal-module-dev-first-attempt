@@ -11,7 +11,7 @@ define('SINGLE_BLOG_DATE_FORMAT', 'F d, Y');
 
 /**
  * Returns a list of blog entries
- * 
+ *
  * @param $number
  *   The number of blog entries to return.
  * @return
@@ -24,9 +24,9 @@ function single_blog_list($number)
         ->fields('n', ['nid', 'title', 'created', 'uid'])
         ->condition('type', SINGLE_BLOG_NODE_TYPE)
         ->condition('status', 1)
-        ->orderBy('created', 'DESC')
-        ->range(0, $number)
-        ->addTag('node_access')
+        // ->orderBy('created', 'DESC')
+        // ->range(0, $number)
+        // ->addTag('node_access')
         ->execute();
 
     return $query;
@@ -50,9 +50,9 @@ function single_blog_block_info()
 
 /**
  * Implements hook_block_view().
- * 
+ *
  * Third draft!
- * 
+ *
  * @param $delta
  *   The name of the requested block.
  */

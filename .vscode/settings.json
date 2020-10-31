@@ -1,6 +1,6 @@
 {
   "intelephense.diagnostics.undefinedConstants": true,
-  "intelephense.diagnostics.undefinedMethods": true,
+  "intelephense.diagnostics.undefinedMethods": false,
   "intelephense.diagnostics.undefinedFunctions": true,
   "intelephense.diagnostics.undefinedProperties": true,
   "files.associations": {
@@ -19,7 +19,7 @@
   "css.validate": true,
   "diffEditor.ignoreTrimWhitespace": false,
   "editor.tabSize": 2,
-  "editor.autoIndent": true,
+  "editor.autoIndent": "full",
   "editor.insertSpaces": true,
   "editor.formatOnPaste": true,
   "editor.formatOnSave": false,
@@ -42,4 +42,7 @@
   "php.validate.enable": true,
   "php.validate.run": "onType",
   "intelephense.environment.documentRoot": "core/index.php",
+  "prettier.requireConfig": true,
+
+
 }

@@ -1,0 +1,492 @@
+<?php
+
+/**
+ * Implements hook_entity_info().
+ */
+function artwork_entity_info()
+{
+  //'artwork' machine name for this entity
+  $return['artwork'] = [
+    'label' => t('Artwork'),
+    'controller class' => 'ArtworkController',
+    //Where atwork is gonna be stored
+    'base table' => 'artwork',
+    'revision table' => 'artwork_revision',
+    //allows us to abstract out the def. of the path within Drupal, where artwork will be accessed
+    'uri callback' => 'artwork_uri',
+    //indicates to FieldAPI,
+    //that we can attach fields to this entity
+    //same as "node"
+    'fieldable' => TRUE,
+    'entity keys' => [
+      'id' => 'aid',
+      'revision' => 'vid',
+      'bundle' => 'type',
+      'label' => 'title',
+    ],
+    'bundle keys' => [
+      'bundle' => 'type',
+    ],
+    //controller should keep a copy of an entity in memory after it's been requested
+    'static cache' => TRUE,
+    'bundles' => [],
+    'view modes' => [
+      'full' => [
+        'label' => t('Full content'),
+        //enables field formatters to be configured separately
+        'custom settings' => FALSE,
+      ],
+      'teaser' => [
+        'label' => t('Teaser'),
+        'custom settings' => FALSE,
+      ],
+    ],
+  ];
+
+  foreach (artwork_types() as $type => $info) {
+    $return['artwork']['bundles'][$type] = [
+      'label' => $info->name,
+      'admin' => [
+        //path used in hook_menu()
+        'path' => 'admin/structure/artworks/manage/%artwork_type',
+        //exact path when generating linksclo
+        'real path' => 'admin/structure/artworks/manage/' . str_replace("_", '-', $type),
+        'bundle argument' => 4,
+        'access arguments' => ['administer artworks'],
+      ],
+    ];
+  }
+
+  return $return;
+}
+
+function artwork_uri($artwork)
+{
+  return array(
+    'path' => 'artwork' . $artwork->aid,
+  );
+}
+
+function artwork_types()
+{
+  //Central collector for static variables
+  //__FUNCTION__ represents this function's name
+  //lightweight cache
+  //Don't use for too large data or cheap-to-load data
+  $types = &drupal_static(__FUNCTION__);
+
+  if (empty($types)) {
+    //MUST BE AN OBJECT
+    $types['painting'] = (object)[
+      //property "type" has to match with 'bundle keys' in hook_entity_info()
+      'type' => 'painting',
+      'name' => t('Painting'),
+      'description' => t('A picture made with paint'),
+    ];
+
+    $types['sculpture'] = (object)[
+      'type' => 'sculpture',
+      'name' => t('Sculpture'),
+      'description' => t('A carving made out of store or wood.'),
+    ];
+  }
+
+  return $types;
+}
+
+//Necessary placeholder for menu
+function artwork_type_load($type)
+{
+  $types = artwork_types();
+  //in URL are dashes used but in system we use undescores
+  $type = str_replace('-', '_', $type);
+  return isset($types[$type]) ? $types[$type] : FALSE;
+}
+
+    function artwork_load($aid = NULL, $vid = NULL, $reset = FALSE)
+    {
+        $aids = (isset($aid)) ? [$aid] : [];
+        $conditions = (isset($vid)) ? [$vid] : [];
+        $artwork = artwork_load_multiple($aids, $conditions, $reset);
+        return $artwork ? reset($artwork) : FALSE;
+    }
+
+    function artwork_load_multiple($aids = [], $conditions = [], $reset = FALSE)
+    {
+        //creates new instance of ArtworkController
+        //calls load() on it
+        //makes loading of more objects cheaper and faster
+        //most entity operations in Drupal assume multiple objects
+        return entity_load('artwork', $aids, $conditions, $reset);
+    }
+
+
+
+
+/**
+ * Implements hook_menu();
+ */
+function artwork_menu()
+{
+  //sets artwork type landing page
+  $items['admin/structure/artworks'] = [
+    'title' => 'Manage Artworks',
+    'descirption' => 'Manage artworks.',
+    'page callback' => 'artwork_overview_types',
+    'access arguments' => ['administer artworks'],
+  ];
+
+  //sets up a callback fro viewing and editing each artwork type (bundle)
+  $items['admin/structure/artworks/manage/%artwork_type'] = [
+    'title' => 'View artwork type',
+    'title callback' => 'artwork_type_page_title',
+    'title arguments' => [4],
+    'page callback' => 'artwork_information',
+    'page arguments' => [4],
+    'access arguments' => ['administer artworks'],
+  ];
+
+  //creates MENU tab - called LOCAL TASK
+  $items['admin/structure/artworks/manage/%artwork_type/view'] = [
+    'title' => 'View',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  ];
+
+  //index page of artwork types
+  $items['artwork/add'] = [
+    'title' => 'Add new artwork',
+    'page callback' => 'artwork_add_page',
+    'access arguments' => ['create artworks'],
+    'weight' => 1,
+    'menu_name' => 'management',
+    'file' => 'artwork.pages.inc',
+  ];
+
+  //loop through all over availabe artwork types and create a menu item for each
+  foreach (artwork_types() as $type) {
+    $type_url_str = str_replace('_', '-', $type->type);
+    $items['artwork/add/' . $type_url_str] = [
+      'title' => $type->name,
+      //check_plain()
+      //takes whatever is specified in the title and escape any and all
+      //HTML in it
+      'title callback' => 'check_plain',
+      'page callback' => 'artwork_add',
+      'page arguments' => [2],
+      'access arguments' => ['create artwork'],
+      'description' => $type->description,
+    ];
+  }
+
+  //viewwing artworks
+  $items['artwork/%artwork'] = [
+    'title callback' => 'artwork_page_title',
+    'title arguments' => [1],
+    'page callback' => 'artwork_page_view',
+    'page arguments' => [1],
+    'access arguments' => ['view artworks'],
+    'type' => MENU_CALLBACK,
+  ];
+
+  $items['artwork/%artwork/view'] = [
+    'title' => 'View',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  ];
+
+  //editing
+  $items['artwork/%artwork/edit'] = [
+    'title' => 'Edit',
+    'page callback' => 'artwork_page_edit',
+    'page arguments' => [1],
+    'access arguments' => ['update artworks'],
+    'weight' => 0,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  ];
+
+  //deleting
+  $items['artwork/%artwork/delete'] = [
+    'title' => 'Delete',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['artwork_delete_confirm', 1],
+    'access arguments' => ['delete artworks'],
+    'weight' => 1,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+  ];
+
+  return $items;
+}
+
+function artwork_delete_confirm($form, &$form_state, $artwork)
+{
+  $form['artwork'] = $artwork;
+
+  //always provide entity id in the same form key as in the entity
+  //edit form
+  $form['aid'] = ['#type' => 'value', '#value' => $artwork->aid];
+  return confirm_form(
+    t('Are you sure you want to delete %title ?', ['%title' => $artwork->title]),
+    'artwork/' . $artwork->aid,
+    t('This action cannot be undone'),
+    t('Delete'),
+    t('Cancel')
+  );
+}
+
+function artwork_delete_confirm_submit($form, &$form_state){
+  if($form_state['values']['confirm']){
+    $artwork = artwork_load($form_state['values']['aid']);
+    artwork_delete($form_state['values']['aid']);
+    watchdog('artwork', '@type: Deleted %title.', ['@type' => $artwork->type, '%title'=>$artwork->title]);
+
+    $types = artwork_types();
+
+    drupal_set_message(
+      t(
+        '@type %title has been deleted.',
+        [
+          '@type' => $types[$artwork->type]->name,
+          '%title' => $artwork->title
+        ],
+      )
+      );
+      $form_state['redirect'] = '<front>';
+  }
+}
+
+function artwork_delete($aid){
+  return artwork_delete_multiple([$aid]);
+}
+
+function artwork_delete_multiple($aids){
+  return entity_get_controller('artwork')->delete($aids);
+}
+
+function artwork_page_edit($artwork)
+{
+  $types = artwork_types();
+  drupal_set_title(
+    t(
+      '<em>Edit @type</em> @title',
+      [
+        '@type' => $types[$artwork->type]->name,
+        '@title' => $artwork->title
+      ]
+    ),
+    PASS_THROUGH
+  );
+
+  return drupal_get_form($artwork->type . '_artwork_form', $artwork);
+}
+
+function artwork_page_title($artwork)
+{
+  return $artwork->title;
+}
+
+function artwork_page_view($artwork, $view_mode = 'full')
+{
+  //remove previously built content, if exists.
+  $artwork->content = [];
+
+  if ($view_mode == 'teaser') {
+    $artwork->content['title'] = [
+      '#margkup' => filter_xss($artwork->title),
+      '#weight' => -5,
+    ];
+  }
+
+  //build fields content.
+  field_attach_prepare_view(
+    'artwork',
+    [$artwork->aid],
+    $view_mode
+  );
+
+  entity_prepare_view('artwork', [$artwork->aid]);
+  $artwork->content += field_attach_view('artwork', $artwork, $view_mode);
+
+  return $artwork->content;
+}
+
+function artwork_add_page()
+{
+  //returns current menu item
+  $item = menu_get_item();
+  //used for getting children of an arbitrary menu item
+  $links = system_admin_menu_block($item);
+
+  foreach ($links as $link) {
+    $items[] = l(
+      $link['title'],
+      $link['href'],
+      $item['localized_options']
+      //strips out html tags
+    ) . ': ' . filter_xss_admin($link['description']);
+  }
+
+  return theme('item_list', ['items' => $items]);
+}
+
+function artwork_add($type)
+{
+  global $user;
+
+  $types = artwork_types();
+  $type = isset($type) ? str_replace('-', '_', $type) : NULL;
+  if (empty($types[$type])) {
+    return MENU_NOT_FOUND;
+  }
+
+  $artwork = entity_get_controller('artwork')->create($type);
+
+  //drupal_set_title strips HTML
+  //PASS_THROUGH allows HTMl
+  drupal_set_title(t('Create @name', ['@name' => $types[$type]->name]), PASS_THROUGH);
+  return drupal_get_form($type . '_artwork_form', $artwork);
+}
+
+function artwork_overview_types()
+{
+  foreach (artwork_types() as $type => $info) {
+    $type_url_str = str_replace('_', '-', $type);
+    $label = t('View @type', ['@type' => $info->name]);
+    $items[] = l($label, 'admin/structure/artworks/manage/' . $type_url_str);
+  }
+
+  return theme('item_list', ['items' => $items]);
+}
+
+function artwork_type_page_title($type)
+{
+  return t('Manage @type', ['@type' => $type->name]);
+}
+
+function artwork_information($artwork_type)
+{
+  return $artwork_type->name . ': ' . $artwork_type->description;
+}
+
+/**
+ * Implements hook_forms()
+ * new form for every type we have
+ * declares, that all of them should use the same callback function
+ */
+function artwork_forms()
+{
+  $forms = [];
+  if ($types = artwork_types()) {
+    foreach (array_keys($types) as $type) {
+      $forms[$type . '_artwork_form']['callback'] = 'artwork_form';
+    }
+  }
+
+  return $forms;
+}
+
+function artwork_form($form, &$form_state, $artwork)
+{
+  ///set the id to identify this as an artwork edit form
+  $form['#id'] = 'artwork-form';
+
+  //save the arttwork for later, in case we need it
+  $form['#artwork'] = $artwork;
+  $form_state['artwork'] = $artwork;
+
+  //common fields
+  $form['title'] = [
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => $artwork->title,
+    '#weight' => -5,
+    '#required' => TRUE,
+  ];
+
+  $form['revision'] = [
+    '#access' => user_access('administer artworks'),
+    '#type' => 'checkbox',
+    '#title' => t('Create new revision'),
+    '#default_value' => 0,
+  ];
+
+  //add the buttons.
+  $form['buttons'] = [
+    '#weight' => 100,
+    'submit' => [
+      '#type' => 'submit',
+      '#value' => t('Save'),
+      '#weight' => 5,
+      '#submit' => ['artwork_form_submit'],
+    ],
+  ];
+
+  if (!empty($artwork->aid)) {
+    $from['buttons']['delete'] = [
+      '#access' => user_access('delete artworks'),
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+      '#weight' => 15,
+      '#submit' => ['artwork_form_delete_submit'],
+    ];
+  }
+
+  $form['#validate'][] = 'artwork_form_validate';
+
+  //adds something complex
+  field_attach_form('artwork', $artwork, $form, $form_state);
+
+  return $form;
+}
+
+function artwork_form_validate($form, &$form_state)
+{
+  $artwork = $form_state['artwork'];
+
+  //field validation.
+  field_attach_form_validate('artwork', $artwork, $form, $form_state);
+}
+
+function artwork_form_submit($form, &$form_state)
+{
+  global $user;
+
+  $artwork = &$form_state['artwork'];
+
+  //set the artwork's uid if it's being created at this time.
+  if (empty($artwork->uid)) {
+    $artwork->uid = $user->uid;
+  }
+
+  $artwork->title = $form_state['values']['title'];
+  $artwork->revision = $form_state['values']['revision'];
+
+  //notify fiedl widgets.
+  field_attach_submit('artwork', $artwork, $form, $form_state);
+
+  //save the artwork
+  artwork_save($artwork);
+
+  //notify the user
+  drupal_set_message(t('Artwork saved.'));
+
+  $form_state['redirect'] = 'artwork/' . $artwork->aid;
+}
+
+function artwork_save($artwork)
+{
+  return entity_get_controller('artwork')->save($artwork);
+}
+
+//redirects user to artwork/$aid/delete
+function artwork_form_delete_submit($form, &$form_state)
+{
+  $destination = [];
+  if (isset($_GET['destination'])) {
+    $destination = drupal_get_destination();
+    unset($_GET['destination']);
+  }
+  $artwork = $form['#artwork'];
+  $form_state['redirect'] = ['artwork/' . $artwork->aid . '/delete', ['query' => $destination]];
+}
