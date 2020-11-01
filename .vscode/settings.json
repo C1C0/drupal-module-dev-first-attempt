@@ -42,7 +42,4 @@
   "php.validate.enable": true,
   "php.validate.run": "onType",
   "intelephense.environment.documentRoot": "core/index.php",
-  "prettier.requireConfig": true,
-
-
 }

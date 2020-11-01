@@ -103,22 +103,22 @@ function artwork_type_load($type)
   return isset($types[$type]) ? $types[$type] : FALSE;
 }
 
-    function artwork_load($aid = NULL, $vid = NULL, $reset = FALSE)
-    {
-        $aids = (isset($aid)) ? [$aid] : [];
-        $conditions = (isset($vid)) ? [$vid] : [];
-        $artwork = artwork_load_multiple($aids, $conditions, $reset);
-        return $artwork ? reset($artwork) : FALSE;
-    }
+function artwork_load($aid = NULL, $vid = NULL, $reset = FALSE)
+{
+  $aids = (isset($aid)) ? [$aid] : [];
+  $conditions = (isset($vid)) ? [$vid] : [];
+  $artwork = artwork_load_multiple($aids, $conditions, $reset);
+  return $artwork ? reset($artwork) : FALSE;
+}
 
-    function artwork_load_multiple($aids = [], $conditions = [], $reset = FALSE)
-    {
-        //creates new instance of ArtworkController
-        //calls load() on it
-        //makes loading of more objects cheaper and faster
-        //most entity operations in Drupal assume multiple objects
-        return entity_load('artwork', $aids, $conditions, $reset);
-    }
+function artwork_load_multiple($aids = [], $conditions = [], $reset = FALSE)
+{
+  //creates new instance of ArtworkController
+  //calls load() on it
+  //makes loading of more objects cheaper and faster
+  //most entity operations in Drupal assume multiple objects
+  return entity_load('artwork', $aids, $conditions, $reset);
+}
 
 
 
@@ -135,6 +135,14 @@ function artwork_menu()
     'page callback' => 'artwork_overview_types',
     'access arguments' => ['administer artworks'],
   ];
+
+  //shows recent
+  $items['artwork/recent'] = array(
+    'title' => 'Recently added artworks',
+    'page callback' => 'artwork_page_list_recent',
+    'access arguments' => array('view artworks'),
+    'file' => 'artwork.pages.inc',
+  );
 
   //sets up a callback fro viewing and editing each artwork type (bundle)
   $items['admin/structure/artworks/manage/%artwork_type'] = [
@@ -235,11 +243,12 @@ function artwork_delete_confirm($form, &$form_state, $artwork)
   );
 }
 
-function artwork_delete_confirm_submit($form, &$form_state){
-  if($form_state['values']['confirm']){
+function artwork_delete_confirm_submit($form, &$form_state)
+{
+  if ($form_state['values']['confirm']) {
     $artwork = artwork_load($form_state['values']['aid']);
     artwork_delete($form_state['values']['aid']);
-    watchdog('artwork', '@type: Deleted %title.', ['@type' => $artwork->type, '%title'=>$artwork->title]);
+    watchdog('artwork', '@type: Deleted %title.', ['@type' => $artwork->type, '%title' => $artwork->title]);
 
     $types = artwork_types();
 
@@ -251,16 +260,18 @@ function artwork_delete_confirm_submit($form, &$form_state){
           '%title' => $artwork->title
         ],
       )
-      );
-      $form_state['redirect'] = '<front>';
+    );
+    $form_state['redirect'] = '<front>';
   }
 }
 
-function artwork_delete($aid){
+function artwork_delete($aid)
+{
   return artwork_delete_multiple([$aid]);
 }
 
-function artwork_delete_multiple($aids){
+function artwork_delete_multiple($aids)
+{
   return entity_get_controller('artwork')->delete($aids);
 }
 
@@ -489,4 +500,48 @@ function artwork_form_delete_submit($form, &$form_state)
   }
   $artwork = $form['#artwork'];
   $form_state['redirect'] = ['artwork/' . $artwork->aid . '/delete', ['query' => $destination]];
+}
+
+/**
+ * implements hook_field_extra_fields()
+ */
+function artwork_field_extra_fields()
+{
+  foreach (artwork_types() as $type) {
+    $extra['artwork'][$type->type] = array(
+      'form' => array(
+        'title' => array(
+          'label' => t('Title'),
+          'description' => t('The name of the artwork'),
+          'weight' => -5,
+        ),
+      ),
+      'display' => array(
+        'title' => array(
+          'label' => t('Title'),
+          'description' => t('The name of the artwork'),
+          'weight' => -5,
+        ),
+      ),
+    );
+  }
+  return $extra;
+}
+
+
+function artwork_page_list_recent(){
+  $content = [];
+
+  $query = new EntityFieldQuery();
+  $query
+  ->entityCondition('entity_type', 'artwork')
+  ->propertyOrderBy('created', 'DESC')
+  ->fieldCondition('field_artist', 'value', 'Da Vinci', 'CONTAINS', 0)
+  ->range(0, 5);
+  $result = $query->execute();
+  $artworks = artwork_load_multiple(array_keys($result['artwork']));
+  foreach ($artworks as $artwork) {
+    $content[] = artwork_page_view($artwork, 'teaser');
+  }
+  return $content;
 }
